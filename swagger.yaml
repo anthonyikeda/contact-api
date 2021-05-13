@@ -1,0 +1,298 @@
+openapi: 3.0.0
+info:
+  title: Contact REST API
+  description: Demo APi for containerization and modernization
+  version: 0.0.1
+
+servers:
+  - url: http://localhost:8080
+    description: Local development URL
+
+paths:
+  /api/contact:
+    get:
+      tags:
+        - Typical
+      summary: get a list of contacts
+      operationId: findContactsByCity
+      parameters:
+        - name: start
+          in: query
+          schema:
+            type: number
+          required: false
+        - name: size
+          in: query
+          schema:
+            type: number
+          required: false
+        - name: city
+          in: query
+          schema:
+            type: string
+          required: false
+      responses:
+        '200':
+          description: Array of Contacts matching the given criteria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Contact'
+    post:
+      tags:
+        - Typical
+      summary: Create new contact
+      operationId: createContact
+      parameters:
+        - name: first_name
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: last_name
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: email_address
+          in: query
+          schema:
+            type: string
+          required: false
+      responses:
+        '201':
+          description: Contact was successfully created
+          headers:
+            Location:
+              schema:
+                type: string
+  /api/contact/{contact_id}:
+    get:
+      tags:
+        - Contact Mutations
+      summary: Get a Contact from the API
+      operationId: getContactById
+      parameters:
+        - name: contact_id
+          in: path
+          schema:
+            type: number
+          required: true
+      responses:
+        '200':
+          description: User was successfully located
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contact'
+    put:
+      tags:
+        - Contact Mutations
+      summary: Update a contact
+      operationId: updateContact
+      parameters:
+        - name: contact_id
+          in: path
+          schema:
+            type: number
+          required: true
+        - name: first_name
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: last_name
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: email_address
+          in: query
+          schema:
+            type: string
+          required: false
+      responses:
+        '203':
+          description: Update was accepted
+        '304':
+          description: Changes were not made to the Contact
+        '404':
+          description: Contact was not found, unable to resolve URL
+    delete:
+      tags:
+        - Contact Mutations
+      summary: Delete Contact and attached Address
+      operationId: deleteContact
+      parameters:
+        - name: contact_id
+          in: path
+          schema:
+            type: number
+          required: true
+      responses:
+        '203':
+          description: Contact was flagged for deletion
+        '404':
+          description: Contact was not found; URL could not be resolved
+  /api/contact/{contact_id}/address:
+    post:
+      tags:
+        - Address Mutations
+      summary: Create address for contact
+      operationId: createContactAddress
+      parameters:
+        - name: contact_id
+          in: path
+          schema:
+            type: number
+          required: true
+      requestBody:
+        description: Request body
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Address'
+      responses:
+        '201':
+          description: Address was correctly created and allocated to contact
+          headers:
+            Location:
+              schema:
+                type: string
+        '400':
+          description: Bad request, user may already have an address allocated
+        '404':
+          description: Contact was not found, URL could not be resolved
+  /api/contact/{contact_id}/address/{address_id}:
+    put:
+      tags:
+        - Address Mutations
+      summary: Update Contact address
+      operationId: updateContactAddress
+      parameters:
+        - name: contact_id
+          in: path
+          schema:
+            type: number
+          required: false
+        - name: address_id
+          in: path
+          schema:
+            type: number
+          required: true
+        - name: street_1
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: street_2
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: city
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: country
+          in: query
+          schema:
+            type: string
+          required: false
+        - name: postal_code
+          in: query
+          schema:
+            type: string
+          required: false
+      responses:
+        '203':
+          description: Updated was accepted
+        '304':
+          description: No changes were made
+        '404':
+          description: Contact or Address was not found
+          headers:
+            X-Not-Found:
+              schema:
+                enum:
+                  - Contact
+                  - Address
+              examples:
+                Client:
+                  value: 'Client'
+                  summary: Client was not found
+                Address:
+                  value: 'Address'
+                  summary: Address was not found
+    delete:
+      tags:
+        - Address Mutations
+      summary: Delete contact address
+      operationId: deleteContactAddress
+      parameters:
+        - name: contact_id
+          in: path
+          schema:
+            type: number
+          required: false
+        - name: address_id
+          in: path
+          schema:
+            type: number
+          required: true
+      responses:
+        '203':
+          description: Accepted the deletion
+        '404':
+          description: Address or contact were not found, unable to resolve URL
+          headers:
+            X-Not-Found:
+              schema:
+                enum:
+                  - Contact
+                  - Address
+              examples:
+                Client:
+                  value: 'Client'
+                  summary: Client was not found
+                Address:
+                  value: 'Address'
+                  summary: Address was not found
+components:
+  schemas:
+    Contact:
+      properties:
+        contact_id:
+          type: number
+        first_name:
+          type: string
+        last_name:
+          type: string
+        email_address:
+          type: string
+          format: email
+        address:
+          $ref: '#/components/schemas/Address'
+    Address:
+      properties:
+        address_id:
+          type: number
+        contact_id:
+          type: number
+        street_1:
+          type: string
+        street_2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postal_code:
+          type: string
+

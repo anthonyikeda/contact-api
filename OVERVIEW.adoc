@@ -1,0 +1,12 @@
+= Contact API
+Anthony Ikeda <anthony.ikeda@gmail.com>
+Version 0.1
+:toc:
+:icons: font
+
+== Intro
+
+Basic API to demonstrate Quarkus and containerization of microservices. The API consists of 2 entities: `Contact` and `Address`. `Address` is a composite to `Contact`.
+
+== API
+

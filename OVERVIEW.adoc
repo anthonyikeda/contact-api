@@ -9,4 +9,130 @@ Version 0.1
 Basic API to demonstrate Quarkus and containerization of microservices. The API consists of 2 entities: `Contact` and `Address`. `Address` is a composite to `Contact`.
 
 == API
+See the swagger docs for the API
+
+== Configuring Kubernetes
+
+The current setup relies on a PostgreSQL database running outside the cluster which therefore requires a service and service-endpoint to be configured:
+
+[yaml]
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-database-service
+spec:
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+----
+
+[yaml]
+----
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: my-database-service
+subsets:
+  - addresses:
+      - ip: 192.168.64.1
+    ports:
+      - port: 5432
+----
+
+== Set up the Auto Scaling
+https://github.com/kubernetes/minikube/issues/9370[See here]
+
+Once deployed, we want to add an autoscaling rule:
+
+First we need to set up the metrics server.
+
+Delete the outdated cluster role:
+
+----
+$ kubectl delete clusterrole system:heapster
+clusterrole.rbac.authorization.k8s.io "system:heapster" deleted
+----
+
+Create the Cluster Role Binding:
+
+[yml]
+----
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:heapster
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: kube-system
+----
+
+And apply it:
+
+----
+$ kubectl apply -f src/main/k8s/cluster-role-binding.yml
+Warning: rbac.authorization.k8s.io/v1beta1 ClusterRoleBinding is deprecated in v1.17+, unavailable in v1.22+; use rbac.authorization.k8s.io/v1 ClusterRoleBinding
+clusterrolebinding.rbac.authorization.k8s.io/metrics-server created
+----
+
+Then create the cluster role:
+
+----
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:heapster
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - events
+      - namespaces
+      - nodes
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/stats
+    verbs:
+      - get
+----
+
+And apply it:
+----
+$ kubectl apply -f src/main/k8s/cluster-role.yml
+clusterrole.rbac.authorization.k8s.io/system:heapster created
+----
+
+Next deploy the metrics-server:
+
+----
+$ minikube addons enable metrics-server
+----
+
+And scale the deployment:
+
+[bash]
+----
+$ kubectl autoscale deployment contact-api --cpu-percent=50 --min=1 --max=10
+----
 

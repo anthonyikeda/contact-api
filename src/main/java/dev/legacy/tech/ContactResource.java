@@ -60,36 +60,14 @@ public class ContactResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response findContactsPaginated(@DefaultValue("0") @QueryParam("start") Integer start,
                                        @DefaultValue("10") @QueryParam("size") Integer size) {
-        List<Contact> contacts;
         log.debug("Querying for all contacts with start {} and size {}", start, size);
-        Timer.Sample queryTimer = Timer.start(registry);
-        contacts = repository.find("select c from Contact c").page(start, size).list();
-        queryTimer.stop(registry.timer("contacts.all.panache.query"));
-
-        Timer.Sample transformTime = Timer.start();
-        List<ContactDTO> results = contacts.stream().map(contact -> {
-            ContactDTO contactDTO = new ContactDTO();
-            contactDTO.setContactId(contact.getContactId());
-            contactDTO.setEmailAddr(contact.getEmailAddr());
-            contactDTO.setFirstName(contact.getFirstName());
-            contactDTO.setLastName(contact.getLastName());
-
-            AddressDTO addrDTO = new AddressDTO();
-            Address address = contact.getAddress();
-            addrDTO.setAddressId(address.getAddressId());
-            addrDTO.setStreet1(address.getStreet1());
-            addrDTO.setStreet2(address.getStreet2());
-            addrDTO.setCity(address.getCity());
-            addrDTO.setState(address.getState());
-            addrDTO.setCountry(address.getCountry());
-            addrDTO.setPostalCode(address.getPostalCode());
-            contactDTO.setAddress(addrDTO);
-
-            return contactDTO;
-        }).collect(Collectors.toList());
-
-        transformTime.stop(registry.timer("contacts.all.transform"));
-        return Response.ok(results).build();
+        try {
+            List<ContactDTO> results = this.contactService.getPaginatedContacts(start, size);
+            return Response.ok(results).build();
+        } catch(Exception e) {
+            log.error("Error getting the page of results", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+        }
     }
 
     @PUT

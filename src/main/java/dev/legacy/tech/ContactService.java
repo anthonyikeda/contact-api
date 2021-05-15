@@ -59,6 +59,8 @@ public class ContactService {
             }
 
             try {
+                rs.close();
+                pstmt.close();
                 con.close();
             } catch(SQLException sqle) {}
             queryTimer.stop(registry.timer("contacts.all.jdbc.query"));

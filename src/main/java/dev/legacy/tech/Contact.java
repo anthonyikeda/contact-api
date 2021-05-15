@@ -20,7 +20,7 @@ public class Contact {
     @Column(name="contact_email_address")
     private String emailAddr;
 
-    @OneToOne(mappedBy = "contact", fetch = FetchType.EAGER, cascade = {CascadeType.REMOVE})
+    @OneToOne(mappedBy = "contact", fetch = FetchType.LAZY, cascade = {CascadeType.REMOVE})
     @JoinColumn(name="contact_id")
     private Address address;
 

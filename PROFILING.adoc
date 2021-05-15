@@ -1,0 +1,54 @@
+= Profiling the Quarkus Application
+
+This is the code that is being profiled:
+
+.ContactResource.java
+[source,java]
+----
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response findContactsPaginated(@DefaultValue("0") @QueryParam("start") Integer start,
+                                       @DefaultValue("10") @QueryParam("size") Integer size) {
+        List<Contact> contacts;
+        log.debug("Querying for all contacts with start {} and size {}", start, size);
+
+        contacts = repository.find("select c from Contact c").page(start, size).list();
+
+
+        List<ContactDTO> results = contacts.stream().map(contact -> {
+            ContactDTO contactDTO = new ContactDTO();
+            contactDTO.setContactId(contact.getContactId());
+            contactDTO.setEmailAddr(contact.getEmailAddr());
+            contactDTO.setFirstName(contact.getFirstName());
+            contactDTO.setLastName(contact.getLastName());
+
+            AddressDTO addrDTO = new AddressDTO();
+            Address address = contact.getAddress();
+            addrDTO.setAddressId(address.getAddressId());
+            addrDTO.setStreet1(address.getStreet1());
+            addrDTO.setStreet2(address.getStreet2());
+            addrDTO.setCity(address.getCity());
+            addrDTO.setState(address.getState());
+            addrDTO.setCountry(address.getCountry());
+            addrDTO.setPostalCode(address.getPostalCode());
+            contactDTO.setAddress(addrDTO);
+
+            return contactDTO;
+        }).collect(Collectors.toList());
+
+        return Response.ok(results).build();
+    }
+----
+
+When running the application in k8s with a Horizontal Pod Autoscaler there were factors that lead to some issues when scaling up:
+
+1. By default the connection pool had an upper limit of 20 connections. This meant that when the application scaled to 10 pods it attempted to max out the connection pools to 200 and started failing once 100 connections had been made - PostgreSQL was configured with a max connection setting of 100!
+2. As the nnumber of requests increased it was noticed that the calls as started to take longer. The calls started around 300ms then up to 3000ms all the way up to 21000ms. Something fishy was going on.
+3. Performing some profiling outside the kubernetes environment there was a large percentage of time spent in performing the query to the database (24% of the effort was in the PanacheQueryImpl.list() execution)
+
+After doing the profiling I decided to implement some timers using the Quarkus Micrometer extension and narrow down yet again where the problem was.
+
+Was it the actual query to the database? Was it the transformation from the Data Access Object to the Data Transfer Object? Was it the HTTP Request?
+
+So many questions...
+

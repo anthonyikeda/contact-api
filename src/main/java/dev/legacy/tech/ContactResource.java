@@ -1,5 +1,7 @@
 package dev.legacy.tech;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,6 +18,12 @@ import java.util.stream.Collectors;
 public class ContactResource {
 
     private final Logger log = LoggerFactory.getLogger(ContactResource.class);
+
+    @Inject
+    MeterRegistry registry;
+
+    @Inject
+    ContactService contactService;
 
     @Inject
     ContactRepository repository;
@@ -50,17 +58,15 @@ public class ContactResource {
 
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public Response findContactsByCity(@DefaultValue("") @QueryParam("city") String city,
-                                       @DefaultValue("0") @QueryParam("start") Integer start,
+    public Response findContactsPaginated(@DefaultValue("0") @QueryParam("start") Integer start,
                                        @DefaultValue("10") @QueryParam("size") Integer size) {
         List<Contact> contacts;
-        if(!city.equals("")) {
-            log.debug("Searching for contacts in city {}", city);
-            contacts = repository.searchByCity(city, start, size);
-        } else {
-            contacts = repository.findAll().page(start, size).list();
-        }
+        log.debug("Querying for all contacts with start {} and size {}", start, size);
+        Timer.Sample queryTimer = Timer.start(registry);
+        contacts = repository.find("select c from Contact c").page(start, size).list();
+        queryTimer.stop(registry.timer("contacts.all.panache.query"));
 
+        Timer.Sample transformTime = Timer.start();
         List<ContactDTO> results = contacts.stream().map(contact -> {
             ContactDTO contactDTO = new ContactDTO();
             contactDTO.setContactId(contact.getContactId());
@@ -82,6 +88,7 @@ public class ContactResource {
             return contactDTO;
         }).collect(Collectors.toList());
 
+        transformTime.stop(registry.timer("contacts.all.transform"));
         return Response.ok(results).build();
     }
 

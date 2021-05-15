@@ -15,7 +15,7 @@ See the swagger docs for the API
 
 The current setup relies on a PostgreSQL database running outside the cluster which therefore requires a service and service-endpoint to be configured:
 
-[yaml]
+[source,yaml]
 ----
 apiVersion: v1
 kind: Service
@@ -28,7 +28,7 @@ spec:
       targetPort: 5432
 ----
 
-[yaml]
+[source,yaml]
 ----
 apiVersion: v1
 kind: Endpoints
@@ -50,6 +50,7 @@ First we need to set up the metrics server.
 
 Delete the outdated cluster role:
 
+[source,bash]
 ----
 $ kubectl delete clusterrole system:heapster
 clusterrole.rbac.authorization.k8s.io "system:heapster" deleted
@@ -57,7 +58,7 @@ clusterrole.rbac.authorization.k8s.io "system:heapster" deleted
 
 Create the Cluster Role Binding:
 
-[yml]
+[source,yaml]
 ----
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -135,4 +136,25 @@ And scale the deployment:
 ----
 $ kubectl autoscale deployment contact-api --cpu-percent=50 --min=1 --max=10
 ----
+
+== Gotchas
+
+Just because you can scale the application doens't mean its' going to be a smooth ride. In the current example the connection pool per microservice instance is defaulted to 20 maximum connections. If you scale the number of services to 10, then this creates 10 pools of 20 connection (200 connections). By default PostgreSQL only allows 100 connections:
+
+.postgresql.conf
+----
+#------------------------------------------------------------------------------
+# CONNECTIONS AND AUTHENTICATION
+#------------------------------------------------------------------------------
+
+# - Connection Settings -
+
+listen_addresses = '*'          # what IP address(es) to listen on;
+
+max_connections = 100                   # (change requires restart)
+----
+
+Which will cause the newly spawned service instances to fail.
+
+The options then are to either limit the pool sizes of the microservice (preferred) over reconfiguring the database max connections or limit the number of services spawned.
 

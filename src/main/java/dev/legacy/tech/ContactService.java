@@ -126,6 +126,7 @@ public class ContactService {
     }
 
     private AddressDTO addressFromResultSet(ResultSet rs) throws SQLException {
+        Timer.Sample addressTimer = Timer.start();
         AddressDTO address = new AddressDTO();
         address.setAddressId(rs.getLong("address_id"));
         address.setContactId(rs.getLong("contact_id"));
@@ -134,10 +135,12 @@ public class ContactService {
         address.setCity(rs.getString("city"));
         address.setCountry(rs.getString("country"));
         address.setPostalCode(rs.getString("postal_code"));
+        addressTimer.stop(registry.timer("address.resultset.read"));
         return address;
     }
 
     private ContactDTO contactFromResultSet(ResultSet rs) throws SQLException {
+        Timer.Sample readContactTimer = Timer.start();
         ContactDTO contact = new ContactDTO();
         contact.setContactId(rs.getLong("contact_id"));
         contact.setFirstName(rs.getString("contact_first_name"));
@@ -146,6 +149,7 @@ public class ContactService {
 
 
         contact.setAddress(addressFromResultSet(rs));
+        readContactTimer.stop(registry.timer("contact.resultset.read"));
         return contact;
     }
 

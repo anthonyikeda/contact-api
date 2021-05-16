@@ -1,6 +1,7 @@
 package dev.legacy.tech;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,9 +58,11 @@ public class ContactResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response findContactsPaginated(@DefaultValue("0") @QueryParam("start") Integer start,
                                        @DefaultValue("10") @QueryParam("size") Integer size) {
+        Timer.Sample contactRequest = Timer.start();
         log.debug("Querying for all contacts with start {} and size {}", start, size);
         try {
             List<ContactDTO> results = this.contactService.getPaginatedContacts(start, size);
+            contactRequest.stop(registry.timer("contacts.rest.all.request"));
             return Response.ok(results).build();
         } catch(Exception e) {
             log.error("Error getting the page of results", e);

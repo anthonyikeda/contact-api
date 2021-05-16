@@ -1,11 +1,16 @@
 package dev.legacy.tech;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class AddressDTO {
 
     @JsonProperty("address_id")
     private Long addressId;
+
+    @JsonIgnore
+    private Long contactId;
 
     @JsonProperty("street_1")
     private String street1;
@@ -27,6 +32,14 @@ public class AddressDTO {
 
     public Long getAddressId() {
         return addressId;
+    }
+
+    public Long getContactId() {
+        return contactId;
+    }
+
+    public void setContactId(Long contactId) {
+        this.contactId = contactId;
     }
 
     public void setAddressId(Long addressId) {

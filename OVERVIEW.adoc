@@ -6,7 +6,7 @@ Version 0.1
 
 == Intro
 
-Basic API to demonstrate Quarkus and containerization of microservices. The API consists of 2 entities: `Contact` and `Address`. `Address` is a composite to `Contact`.
+Basic API to demonstrate Quarkus and containerization of microservices. The API consists of 2 entities: `ContactDTO` and `AddressDTO`. `AddressDTO` is a composite to `ContactDTO`.
 
 == API
 See the swagger docs for the API

@@ -13,6 +13,7 @@ import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.util.List;
 
+
 @Path("/api/contact")
 public class ContactResource {
 
@@ -57,7 +58,9 @@ public class ContactResource {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response findContactsPaginated(@DefaultValue("0") @QueryParam("start") Integer start,
-                                       @DefaultValue("10") @QueryParam("size") Integer size) {
+                                       @DefaultValue("10") @QueryParam("size") Integer size,
+                                          @HeaderParam("Authorization") String authHeader) {
+        log.info("Auth header: {}", authHeader);
         Timer.Sample contactRequest = Timer.start();
         log.debug("Querying for all contacts with start {} and size {}", start, size);
         try {

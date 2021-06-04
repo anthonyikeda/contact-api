@@ -30,13 +30,23 @@ public class ContactResourceTest {
     }
 
     @Test
+    public void testGetContactCount() {
+        given().when().log().all()
+                .head("/api/contact")
+                .then()
+                .log().all()
+                .statusCode(200)
+                .header("X-Total-Contacts", "6");
+    }
+
+    @Test
     public void testGetAll() {
         given()
                 .when().log().all()
                 .get("/api/contact")
                 .then()
                 .statusCode(200)
-                .body("$.size()", is(3),
+                .body("$.size()", is(4),
                         "[0].contact_id", is(1),
                         "[1].first_name", is("Andrea"));
     }

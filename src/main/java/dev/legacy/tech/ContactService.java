@@ -24,9 +24,11 @@ public class ContactService {
     DataSource dataSource;
 
     public Long createContact(String firstName, String lastName, String emailAddress) throws SQLException {
+        log.debug("Creating new contact {} {}", firstName, lastName);
+
         Long contactId = 0L;
 
-        StringBuilder insert = new StringBuilder("insert into contact (contact_first_name, contact_last_name, contact_email_address)");
+        StringBuilder insert = new StringBuilder("insert into contacts (contact_first_name, contact_last_name, contact_email_address)");
         insert.append(" values(?, ?, ?)");
 
         try (Connection con = dataSource.getConnection()) {
@@ -34,30 +36,34 @@ public class ContactService {
             pstmt.setString(1, firstName);
             pstmt.setString(2, lastName);
             pstmt.setString(3, emailAddress);
-            boolean executed = pstmt.execute();
+            int executed = pstmt.executeUpdate();
 
-            if(executed) {
+            if(executed > 0) {
+                log.debug("Getting generated contactId...");
                 ResultSet rs = pstmt.getGeneratedKeys();
                 if(rs.next()) {
                     contactId = rs.getLong(1);
                 }
+                log.debug("Generated contactId is {}", contactId);
                 rs.close();
             }
 
             try {
                 pstmt.close();
                 con.close();
-            } catch(SQLException sql) {}
+            } catch(SQLException sql) {
+                log.error("Error closing JDBC", sql);
+            }
 
             return contactId;
         }
     }
 
     public void updateContact(ContactDTO contact) throws SQLException {
-        StringBuilder update = new StringBuilder("update contacts set contact_first_name = ? ");
-            update.append("contact_last_name = ?");
-            update.append("contact_email_address = ?");
-            update.append("where contact_id = ?");
+        StringBuilder update = new StringBuilder("update contacts set contact_first_name = ?, ");
+            update.append("contact_last_name = ?, ");
+            update.append("contact_email_address = ? ");
+            update.append("where contact_id = ?;");
 
         PreparedStatement pstmt = null;
 
@@ -101,7 +107,7 @@ public class ContactService {
         }
     }
     public ContactDTO getContactById(Long contactId) throws SQLException {
-        String select = "select * from contacts c join address a on a.contact_id = c.contact_id where c.contact_id = ?";
+        String select = "select * from contacts c where c.contact_id = ?";
         ContactDTO contact = null;
 
         try(Connection con = dataSource.getConnection()) {
@@ -148,7 +154,7 @@ public class ContactService {
         contact.setEmailAddr(rs.getString("contact_email_address"));
 
 
-        contact.setAddress(addressFromResultSet(rs));
+//        contact.setAddress(addressFromResultSet(rs));
         readContactTimer.stop(registry.timer("contact.resultset.read"));
         return contact;
     }
@@ -200,9 +206,9 @@ public class ContactService {
             pstmt.setString(6, address.getCountry());
             pstmt.setString(7, address.getPostalCode());
 
-            boolean executed = pstmt.execute();
+            int executed = pstmt.executeUpdate();
 
-            if(executed) {
+            if(executed > 0) {
                 ResultSet rs = pstmt.getGeneratedKeys();
                 if(rs.next()) {
                     addressId = rs.getLong(1);

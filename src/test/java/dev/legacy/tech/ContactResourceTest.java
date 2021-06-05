@@ -1,6 +1,8 @@
 package dev.legacy.tech;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.http.ContentType;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -49,5 +51,27 @@ public class ContactResourceTest {
                 .body("$.size()", is(4),
                         "[0].contact_id", is(1),
                         "[1].first_name", is("Andrea"));
+    }
+
+    @Test
+    public void testCreateContact() {
+        given().queryParam("first_name", "Jackson")
+                .queryParam("last_name", "Johnson")
+                .queryParam("email_address", "jackson.johnson@europe.com")
+                .contentType(ContentType.fromContentType("application/json"))
+                .when().log().all()
+                .post("/api/contact")
+                .then().log().all()
+                .header("Location", Matchers.matchesPattern("^http://localhost:8081/api/contact/.*"));
+    }
+
+    @Test
+    public void testCreateContactFailed() {
+        given()
+                .contentType(ContentType.fromContentType("application/json"))
+                .when().log().all()
+                .post("/api/contact")
+                .then().log().all()
+                .statusCode(500);
     }
 }

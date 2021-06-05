@@ -121,7 +121,7 @@ public class ContactResource {
     @POST
     @Path("")
     @Transactional
-    @Consumes(value = {"application/json"})
+    @Consumes(value = {"application/json", "application/x-www-form-urlencoded"})
     @Produces(value = {"application/json"})
     public Response createContact(@QueryParam("first_name") String firstName, @QueryParam("last_name") String lastname,
                                   @QueryParam("email_address") String emailAddress) {

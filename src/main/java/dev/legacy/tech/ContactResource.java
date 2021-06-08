@@ -111,11 +111,12 @@ public class ContactResource {
                 log.debug("Saving changed Contact {}", contactId);
                 contactService.updateContact(contact);
                 return Response.accepted().build();
+            } else {
+                return Response.status(Response.Status.NOT_MODIFIED).build();
             }
         } catch(Exception e) {
             return Response.status(Response.Status.BAD_REQUEST).build();
         }
-        return Response.notModified().build();
     }
 
     @POST
@@ -163,7 +164,7 @@ public class ContactResource {
                 Long addressId = contactService.createContactAddress(contactId, address);
                 address.setAddressId(addressId);
                 log.debug("Saved address {} for contact {}", address.getAddressId(), contactId);
-                return Response.created(URI.create(String.format("/api/contact/%d/address%d", contactId, address.getAddressId()))).build();
+                return Response.created(URI.create(String.format("/api/contact/%d/address/%d", contactId, address.getAddressId()))).build();
             } else {
                 return Response.status(Response.Status.BAD_REQUEST)
                         .entity(String.format("Contact already has an address with id %d", addresses.get(0).getAddressId())).build();

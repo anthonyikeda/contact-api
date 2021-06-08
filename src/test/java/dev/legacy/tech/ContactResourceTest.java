@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.assertj.core.api.Assertions.*;
 
 
@@ -59,7 +60,7 @@ public class ContactResourceTest {
                 .get("/api/contact")
                 .then()
                 .statusCode(200)
-                .body("$.size()", is(5),
+                .body("$.size()", is(4),
                         "[0].contact_id", is(1),
                         "[1].first_name", is("Andrea"));
     }
@@ -202,5 +203,22 @@ public class ContactResourceTest {
                 .post("/api/contact/1/address")
                 .then().log().all()
                 .statusCode(400);
+    }
+
+    @Test
+    public void testDeleteContactAddress() {
+        given()
+                .contentType(ContentType.fromContentType("application/json"))
+                .when().log().all()
+                .delete("/api/contact/3/address/12")
+                .then().log().all()
+                .statusCode(202);
+
+        given()
+                .when().log().all()
+                .get("/api/contact/3")
+                .then().log().all()
+                .statusCode(200)
+                .body("$", Matchers.not(Matchers.hasKey("address")));
     }
 }

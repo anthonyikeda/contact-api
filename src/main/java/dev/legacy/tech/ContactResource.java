@@ -274,10 +274,10 @@ public class ContactResource {
                 return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Client").build();
             }
 
-            AddressDTO contactAddress = contactService.getContactAddresses(contactId).get(0);
+            AddressDTO contactAddress = contactService.getContactAddressById(addressId);
 
             if (contactAddress != null) {
-                log.debug("Found address {} for contact{}", addressId, contactId);
+                log.debug("Found address {} for contact {}", addressId, contactId);
                 contactService.deleteAddressById(contactAddress.getAddressId());
                 return Response.accepted().build();
             } else {

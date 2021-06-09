@@ -6,16 +6,18 @@ import io.restassured.response.Response;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.assertj.core.api.Assertions.*;
 
 
 @QuarkusTest
 public class ContactResourceTest {
 
+    private final Logger log = LoggerFactory.getLogger(ContactResourceTest.class);
 
     @BeforeAll
     public static void setup() {
@@ -58,11 +60,11 @@ public class ContactResourceTest {
         given()
                 .when().log().all()
                 .get("/api/contact")
-                .then()
+                .then().log().all()
                 .statusCode(200)
                 .body("$.size()", is(4),
-                        "[0].contact_id", is(1),
-                        "[1].first_name", is("Andrea"));
+                        "[0].contact_id", is(2),
+                        "[1].first_name", is("Sarah"));
     }
 
     @Test
@@ -102,13 +104,26 @@ public class ContactResourceTest {
 
     @Test
     public void testUpdateContact() {
-    given()
+        Response response = given()
+                .queryParam("first_name", "Jessica")
+                .queryParam("last_name", "Manuela")
+                .queryParam("email_address", "jmanuela@home.com")
+                .when().log().all()
+                .post("/api/contact");
+
+        String location = response.getHeader("Location");
+        log.debug("New contact is at {}", location);
+        int status = response.getStatusCode();
+
+        assertThat(status).isEqualTo(201);
+
+        given()
             .queryParam("first_name", "michelle")
             .queryParam("last_name", "masters")
             .queryParam("email_address", "mm@master.com")
             .contentType(ContentType.fromContentType("application/json"))
             .when().log().all()
-            .put("/api/contact/1")
+            .put(location)
             .then()
             .statusCode(202);
     }
@@ -221,4 +236,27 @@ public class ContactResourceTest {
                 .statusCode(200)
                 .body("$", Matchers.not(Matchers.hasKey("address")));
     }
+
+    @Test
+    public void testDeleteNonExistentContactAddress() {
+        given()
+                .contentType(ContentType.fromContentType("application/json"))
+                .when().log().all()
+                .delete("/api/contact/3000/address/12")
+                .then().log().all()
+                .statusCode(404)
+        .header("X-Not-Found", "Client");
+    }
+
+    @Test
+    public void testDeleteContactNonExistentAddress() {
+        given()
+                .contentType(ContentType.fromContentType("application/json"))
+                .when().log().all()
+                .delete("/api/contact/1/address/12000")
+                .then().log().all()
+                .statusCode(404)
+                .header("X-Not-Found", "Address");
+    }
+
 }

@@ -23,6 +23,7 @@ public class ContactServiceTest {
 
     @Test
     public void testUpdateContact() throws Exception {
+        log.debug("testing update contact");
 
         Long contactId = this.contactService.createContact("Mary", "Contrary", "mcontrary@mail.com");
         ContactDTO contact = this.contactService.getContactById(contactId);
@@ -40,6 +41,7 @@ public class ContactServiceTest {
 
     @Test
     public void testCreateContact() {
+        log.debug("Testing create contact");
         try  {
             Long contactId = contactService.createContact("Bob", "Marley", "bob.marley@home.com");
             assertThat(contactId).isNotNull();
@@ -49,24 +51,28 @@ public class ContactServiceTest {
     }
 
     @Test
-    public void getContactAddressById() throws Exception {
+    public void testGetContactAddressById() throws Exception {
+        log.debug("Testing get contact address by id");
         AddressDTO address = this.contactService.getContactAddressById(14L);
         assertThat(address).isNotNull();
     }
 
     @Test
     public void testGetContactCount() throws Exception {
+        log.debug("Test get contact count");
         Long contactCount = this.contactService.getContactCount();
         assertThat(contactCount).isNotNull().isGreaterThan(1);
     }
 
     @Test
     public void testDeleteContactById() throws Exception {
+        log.debug("Test delete contact by id");
 
         Long contactId = contactService.createContact("Bob", "Marley", "bob.marley@home.com");
 
         assertThat(contactId).isNotNull().isGreaterThan(1);
 
+        log.debug("Contact created with id {}", contactId);
         AddressDTO address = new AddressDTO();
         address.setContactId(contactId);
         address.setStreet1("123 Sesame St");
@@ -90,6 +96,7 @@ public class ContactServiceTest {
 
     @Test
     public void testGetContactAddresses() throws Exception {
+        log.debug("Test get contact addresses");
         List<AddressDTO> results = contactService.getContactAddresses(1L);
 
         assertThat(results).isNotNull().isNotEmpty();
@@ -97,6 +104,7 @@ public class ContactServiceTest {
 
     @Test
     public void testCreateContactAddress() {
+        log.debug("Test create contact address");
         try  {
             Long contactId = contactService.createContact("Bob", "Marley", "bob.marley@home.com");
             assertThat(contactId).isNotNull();
@@ -120,6 +128,7 @@ public class ContactServiceTest {
 
     @Test
     public void testGetContactById() {
+        log.debug("Test get contact by id");
         try {
             ContactDTO contact = this.contactService.getContactById(1L);
             Assertions.assertNotNull(contact);
@@ -132,6 +141,7 @@ public class ContactServiceTest {
 
     @Test
     public void testGetContactsPaginated() {
+        log.debug("Test contacts paginated");
         try {
             List<ContactDTO> results = this.contactService.getPaginatedContacts(0, 10);
             assertThat(results).isNotNull().isNotEmpty();

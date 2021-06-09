@@ -163,7 +163,7 @@ public class ContactService {
         log.debug("Querying database for all contacts with start {} and size {}", start, size);
 
         List<ContactDTO> results = new ArrayList<>(size);
-        String query = "SELECT * from contacts c join address a on a.contact_id = c.contact_id limit ? offset ?";
+        String query = "SELECT * from contacts c join address a on a.contact_id = c.contact_id order by c.contact_id limit ? offset ?";
 
         Timer.Sample queryTimer = Timer.start(registry);
         try(Connection con = dataSource.getConnection()) {
@@ -227,6 +227,7 @@ public class ContactService {
     }
 
     public List<AddressDTO> getContactAddresses(Long contactId) throws SQLException {
+        log.debug("Retrieving contact addresses with id {}", contactId);
         List<AddressDTO> results = new ArrayList<>();
         String query = "select * from address where contact_id = ?";
 
@@ -241,6 +242,7 @@ public class ContactService {
                 results.add(address);
             }
 
+            log.debug("Found {} addresses for contactId {}", results.size(), contactId);
             rs.close();
 
             try {
@@ -295,7 +297,9 @@ public class ContactService {
             try {
                 pstmt.close();
                 con.close();
-            } catch(SQLException sqle) {}
+            } catch(SQLException sqle) {
+                log.info(sqle.getMessage(), sqle);
+            }
         }
     }
 
@@ -324,6 +328,14 @@ public class ContactService {
             } else {
                 log.info("Was not able to delete contact with id {}", contactId);
             }
+
+            try {
+                pstmt.close();
+                con.close();
+            } catch(SQLException sqle) {
+                log.info(sqle.getMessage(), sqle);
+            }
+
         }
     }
 
@@ -338,6 +350,13 @@ public class ContactService {
                 log.info("Deleted {} addresses", deletedRows);
             } else {
                 log.info("Did not delete any addresses with id {}", addressId);
+            }
+
+            try {
+                pstmt.close();
+                con.close();
+            } catch(SQLException sqle) {
+                log.info(sqle.getMessage(), sqle);
             }
         }
     }

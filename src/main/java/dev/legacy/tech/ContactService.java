@@ -7,10 +7,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-import javax.sql.DataSource;
-import java.sql.*;
-import java.util.ArrayList;
+import javax.transaction.Transactional;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class ContactService {
@@ -18,346 +17,171 @@ public class ContactService {
     private final Logger log = LoggerFactory.getLogger(ContactService.class);
 
     @Inject
-    MeterRegistry registry;
+    ContactRepository contactRepository;
 
     @Inject
-    DataSource dataSource;
+    AddressRepository addressRepository;
 
-    public Long createContact(String firstName, String lastName, String emailAddress) throws SQLException {
+    @Inject
+    MeterRegistry registry;
+
+    @Transactional
+    public Long createContact(String firstName, String lastName, String emailAddress) {
         log.debug("Creating new contact {} {}", firstName, lastName);
 
-        Long contactId = 0L;
+        ContactDAO contact = new ContactDAO();
+        contact.setFirstName(firstName);
+        contact.setLastName(lastName);
+        contact.setEmailAddress(emailAddress);
 
-        StringBuilder insert = new StringBuilder("insert into contacts (contact_first_name, contact_last_name, contact_email_address)");
-        insert.append(" values(?, ?, ?)");
+        this.contactRepository.persist(contact);
 
-        try (Connection con = dataSource.getConnection()) {
-            PreparedStatement pstmt = con.prepareStatement(insert.toString(), Statement.RETURN_GENERATED_KEYS);
-            pstmt.setString(1, firstName);
-            pstmt.setString(2, lastName);
-            pstmt.setString(3, emailAddress);
-            int executed = pstmt.executeUpdate();
+        log.debug("Saved contact. New id is {}", contact.getContactId());
 
-            if(executed > 0) {
-                log.debug("Getting generated contactId...");
-                ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) {
-                    contactId = rs.getLong(1);
-                }
-                log.debug("Generated contactId is {}", contactId);
-                rs.close();
-            }
+        return contact.getContactId();
+    }
 
-            try {
-                pstmt.close();
-                con.close();
-            } catch(SQLException sql) {
-                log.error("Error closing JDBC", sql);
-            }
+    public void updateContact(ContactDTO contactDTO) {
 
-            return contactId;
+        ContactDAO found = contactRepository.findById(contactDTO.getContactId());
+
+        found.setFirstName(contactDTO.getFirstName());
+        found.setLastName(contactDTO.getLastName());
+        found.setEmailAddress(contactDTO.getEmailAddr());
+
+        contactRepository.persist(found);
+        log.debug("Updated contact with id {}", found.getContactId());
+    }
+
+    public Long getContactCount() {
+        return this.contactRepository.count();
+    }
+
+    public ContactDTO getContactById(Long contactId) throws ContactNotFoundException {
+        try {
+            ContactDAO dao = contactRepository.findById(contactId);
+            return convertDAOtoDTO(dao);
+        } catch(NullPointerException npe) {
+            throw new ContactNotFoundException(String.format("Contact with id %d was not found", contactId));
         }
     }
 
-    public void updateContact(ContactDTO contact) throws SQLException {
-        StringBuilder update = new StringBuilder("update contacts set contact_first_name = ?, ");
-            update.append("contact_last_name = ?, ");
-            update.append("contact_email_address = ? ");
-            update.append("where contact_id = ?;");
+    private ContactDTO convertDAOtoDTO(ContactDAO dao) {
+        Timer.Sample readContactTimer = Timer.start();
+        ContactDTO dto = new ContactDTO();
+        dto.setContactId(dao.getContactId());
+        dto.setFirstName(dao.getFirstName());
+        dto.setLastName(dao.getLastName());
+        dto.setEmailAddr(dao.getEmailAddress());
 
-        PreparedStatement pstmt = null;
-
-        try (Connection con = dataSource.getConnection()) {
-            pstmt = con.prepareStatement(update.toString());
-            pstmt.setString(1, contact.getFirstName());
-            pstmt.setString(2, contact.getLastName());
-            pstmt.setString(3, contact.getEmailAddr());
-            pstmt.setLong(4, contact.getContactId());
-
-            int updated = pstmt.executeUpdate();
-
-            if(updated > 0) {
-                log.debug("Updated contact with id {}", contact.getContactId());
-            }
-
-            try {
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {}
+        if(dao.getAddress() != null) {
+            dto.setAddress(convertAddressDAOtoDTO(dao.getAddress()));
         }
+        readContactTimer.stop(registry.timer("contact.dao.convert"));
+        return dto;
     }
 
-    public Long getContactCount() throws SQLException {
-        String query = "select count(*) from contacts";
-        long totalResults = 0L;
-
-        try(Connection con = dataSource.getConnection()) {
-            Statement stmt = con.createStatement();
-            ResultSet rs = stmt.executeQuery(query);
-            if(rs.next()) {
-                totalResults = rs.getLong(1);
-            }
-            try {
-                rs.close();
-                stmt.close();
-                con.close();
-            } catch(SQLException sqle) {}
-
-            return totalResults;
-        }
-    }
-    public ContactDTO getContactById(Long contactId) throws SQLException {
-        String select = "select * from contacts c where c.contact_id = ?";
-        ContactDTO contact = null;
-
-        try(Connection con = dataSource.getConnection()) {
-            PreparedStatement pstmt = con.prepareStatement(select);
-            pstmt.setLong(1, contactId);
-
-            ResultSet rs = pstmt.executeQuery();
-
-            if(rs.next()) {
-                contact = contactFromResultSet(rs);
-            }
-
-            try {
-                rs.close();
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {}
-
-            return contact;
-        }
-
-    }
-
-    private AddressDTO addressFromResultSet(ResultSet rs) throws SQLException {
+    private AddressDTO convertAddressDAOtoDTO(AddressDAO dao) {
         Timer.Sample addressTimer = Timer.start();
         AddressDTO address = new AddressDTO();
-        address.setAddressId(rs.getLong("address_id"));
-        address.setContactId(rs.getLong("contact_id"));
-        address.setStreet1(rs.getString("street_1"));
-        address.setStreet2(rs.getString("street_2"));
-        address.setCity(rs.getString("city"));
-        address.setCountry(rs.getString("country"));
-        address.setPostalCode(rs.getString("postal_code"));
-        addressTimer.stop(registry.timer("address.resultset.read"));
+        address.setAddressId(dao.getAddressId());
+        address.setStreet1(dao.getStreet1());
+        address.setStreet2(dao.getStreet2());
+        address.setCity(dao.getCity());
+        address.setCountry(dao.getCountry());
+        address.setPostalCode(dao.getPostalCode());
+        addressTimer.stop(registry.timer("address.dao.convert"));
         return address;
     }
 
-    private ContactDTO contactFromResultSet(ResultSet rs) throws SQLException {
-        Timer.Sample readContactTimer = Timer.start();
-        ContactDTO contact = new ContactDTO();
-        contact.setContactId(rs.getLong("contact_id"));
-        contact.setFirstName(rs.getString("contact_first_name"));
-        contact.setLastName(rs.getString("contact_last_name"));
-        contact.setEmailAddr(rs.getString("contact_email_address"));
-
-
-//        contact.setAddress(addressFromResultSet(rs));
-        readContactTimer.stop(registry.timer("contact.resultset.read"));
-        return contact;
-    }
-
-    public List<ContactDTO> getPaginatedContacts(Integer start, Integer size) throws SQLException {
+    public List<ContactDTO> getPaginatedContacts(Integer start, Integer size) {
         log.debug("Querying database for all contacts with start {} and size {}", start, size);
-
-        List<ContactDTO> results = new ArrayList<>(size);
-        String query = "SELECT * from contacts c join address a on a.contact_id = c.contact_id order by c.contact_id limit ? offset ?";
-
         Timer.Sample queryTimer = Timer.start(registry);
-        try(Connection con = dataSource.getConnection()) {
-            PreparedStatement pstmt = con.prepareStatement(query);
-            pstmt.setInt(1, size);
-            pstmt.setInt(2, start);
-            ResultSet rs = pstmt.executeQuery();
 
-            while(rs.next()) {
-                ContactDTO contact = contactFromResultSet(rs);
-                results.add(contact);
-            }
+        List<ContactDTO> results = this.contactRepository.findAll().page(start, size)
+                .stream()
+                .map(this::convertDAOtoDTO)
+                .collect(Collectors.toList());
 
-            try {
-                rs.close();
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {}
-            queryTimer.stop(registry.timer("contacts.all.jdbc.query"));
-        } catch(SQLException sqle) {
-            log.error("Error connecting to the database", sqle);
-            throw sqle;
-        }
+        queryTimer.stop(registry.timer("contacts.all.jdbc.query"));
+
         return results;
     }
 
-    public Long createContactAddress(Long contactId, AddressDTO address) throws SQLException {
-        StringBuilder insert = new StringBuilder("insert into address (contact_id, street_1, street_2, city, state, country, postal_code) ");
-        insert.append(" values(?, ?, ?, ?, ?, ?, ?)");
+    @Transactional
+    public Long createContactAddress(Long contactId, AddressDTO address) throws ContactAddressAlreadyExistsException {
+        ContactDAO contact = contactRepository.findById(contactId);
 
-        try (Connection con = dataSource.getConnection()) {
-            Long addressId = 0L;
+        if(contact.getAddress() == null) {
+            AddressDAO addressDAO = new AddressDAO();
+            addressDAO.setStreet1(address.getStreet1());
+            addressDAO.setStreet2(address.getStreet2());
+            addressDAO.setCity(address.getCity());
+            addressDAO.setState(address.getState());
+            addressDAO.setCountry(address.getCountry());
+            addressDAO.setPostalCode(address.getPostalCode());
 
-            PreparedStatement pstmt = con.prepareStatement(insert.toString(), Statement.RETURN_GENERATED_KEYS);
-            pstmt.setLong(1, contactId);
-            pstmt.setString(2, address.getStreet1());
-            pstmt.setString(3, address.getStreet2());
-            pstmt.setString(4, address.getCity());
-            pstmt.setString(5, address.getState());
-            pstmt.setString(6, address.getCountry());
-            pstmt.setString(7, address.getPostalCode());
-
-            int executed = pstmt.executeUpdate();
-
-            if(executed > 0) {
-                ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) {
-                    addressId = rs.getLong(1);
-                }
-
-                rs.close();
-            }
-
-            try {
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {}
-
-            return addressId;
+            addressDAO.setContact(contact);
+            addressRepository.persist(addressDAO);
+            return addressDAO.getAddressId();
+        } else {
+            throw new ContactAddressAlreadyExistsException(String.format("Customer already has an address with id %d", contact.getAddress().getAddressId()));
         }
     }
 
-    public List<AddressDTO> getContactAddresses(Long contactId) throws SQLException {
+    public List<AddressDTO> getContactAddresses(Long contactId) {
         log.debug("Retrieving contact addresses with id {}", contactId);
-        List<AddressDTO> results = new ArrayList<>();
-        String query = "select * from address where contact_id = ?";
 
-        try (Connection con = dataSource.getConnection()) {
-            PreparedStatement pstmt = con.prepareStatement(query);
-            pstmt.setLong(1, contactId);
-
-            ResultSet rs = pstmt.executeQuery();
-
-            while(rs.next()) {
-                AddressDTO address = addressFromResultSet(rs);
-                results.add(address);
-            }
-
-            log.debug("Found {} addresses for contactId {}", results.size(), contactId);
-            rs.close();
-
-            try {
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {}
-
-            return results;
-        }
+        return this.addressRepository.findByContactId(contactId)
+                .stream()
+                .map(this::convertAddressDAOtoDTO)
+                .collect(Collectors.toList());
     }
 
-    public AddressDTO getContactAddressById(Long addressId) throws SQLException {
-        String query = "select * from address where address_id = ?";
-
-        try (Connection con = dataSource.getConnection()) {
-            AddressDTO address = null;
-            PreparedStatement pstmt = con.prepareStatement(query);
-            pstmt.setLong(1, addressId);
-
-            ResultSet rs = pstmt.executeQuery();
-            if(rs.next()) {
-                address = addressFromResultSet(rs);
-            }
-
-            try {
-                rs.close();
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {}
-            return address;
-        }
+    public AddressDTO getContactAddressById(Long addressId) {
+        Timer.Sample timer = Timer.start();
+        AddressDAO address = this.addressRepository.findById(addressId);
+        AddressDTO dto = convertAddressDAOtoDTO(address);
+        timer.stop(registry.timer("address.by.id"));
+        return dto;
     }
 
-    public void updateAddress(AddressDTO address) throws SQLException {
-        StringBuilder update = new StringBuilder("update address set street_1=?, street_2=?, city=?, state=?, country=?, postal_code=?");
-        update.append(" where address_id=?");
+    public void updateAddress(AddressDTO address) throws AddressNotFoundException {
 
-        try (Connection con = dataSource.getConnection()) {
-            PreparedStatement pstmt = con.prepareStatement(update.toString());
-            pstmt.setString(1, address.getStreet1());
-            pstmt.setString(2, address.getStreet2());
-            pstmt.setString(3, address.getCity());
-            pstmt.setString(4, address.getState());
-            pstmt.setString(5, address.getCountry());
-            pstmt.setString(6, address.getPostalCode());
-            pstmt.setLong(7, address.getAddressId());
+        AddressDAO dao = this.addressRepository.findById(address.getAddressId());
+        if(dao != null) {
+            Timer.Sample timer = Timer.start();
+            dao.setStreet1(address.getStreet1());
+            dao.setStreet2(address.getStreet2());
+            dao.setCity(address.getCity());
+            dao.setState(address.getState());
+            dao.setPostalCode(address.getPostalCode());
+            dao.setCountry(address.getCountry());
 
-            int updatedRows = pstmt.executeUpdate();
-
-            log.debug("Updated {} addresses for addressId {}", updatedRows, address.getAddressId());
-
-            try {
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {
-                log.info(sqle.getMessage(), sqle);
-            }
+            this.addressRepository.persist(dao);
+            timer.stop(this.registry.timer("address.convert.update"));
+            log.debug("Updated addressId {}", address.getAddressId());
+        } else {
+            throw new AddressNotFoundException(String.format("Unable to locate address with id %d", address.getAddressId()));
         }
+
     }
 
-    public void deleteContactById(Long contactId) throws SQLException {
+    @Transactional
+    public void deleteContactById(Long contactId) {
 
         //First delete their addresses if they exist
         List<AddressDTO> addresses = getContactAddresses(contactId);
 
-        addresses.stream().map(AddressDTO::getAddressId).forEach(addressId -> {
-            try {
-                deleteAddressById(addressId);
-            } catch(Exception e){
-                log.error("Error deleting address {}", addressId);
-            }
-        });
+        addresses.stream().map(AddressDTO::getAddressId).forEach(this::deleteAddressById);
 
-        String delete = "delete from contacts where contact_id = ?";
+        this.contactRepository.deleteById(contactId);
+        log.info("Deleted contact with id {}", contactId);
 
-        try(Connection con = dataSource.getConnection()) {
-            PreparedStatement pstmt = con.prepareStatement(delete);
-            pstmt.setLong(1, contactId);
-            int deletedRows = pstmt.executeUpdate();
-
-            if(deletedRows > 0) {
-                log.info("Deleted contact with id {}", contactId);
-            } else {
-                log.info("Was not able to delete contact with id {}", contactId);
-            }
-
-            try {
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {
-                log.info(sqle.getMessage(), sqle);
-            }
-
-        }
     }
 
-    public void deleteAddressById(Long addressId) throws SQLException {
-        String delete = "delete from address where address_id = ?";
-
-        try (Connection con = dataSource.getConnection()) {
-            PreparedStatement pstmt = con.prepareStatement(delete);
-            pstmt.setLong(1, addressId);
-            int deletedRows = pstmt.executeUpdate();
-            if(deletedRows > 0) {
-                log.info("Deleted {} addresses", deletedRows);
-            } else {
-                log.info("Did not delete any addresses with id {}", addressId);
-            }
-
-            try {
-                pstmt.close();
-                con.close();
-            } catch(SQLException sqle) {
-                log.info(sqle.getMessage(), sqle);
-            }
-        }
+    @Transactional
+    public void deleteAddressById(Long addressId) {
+        this.addressRepository.deleteById(addressId);
     }
 }

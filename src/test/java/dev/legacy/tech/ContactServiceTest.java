@@ -7,11 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-
-import static org.assertj.core.api.Assertions.*;
-
-import java.sql.SQLException;
 import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @QuarkusTest
 public class ContactServiceTest {
@@ -42,23 +40,20 @@ public class ContactServiceTest {
     @Test
     public void testCreateContact() {
         log.debug("Testing create contact");
-        try  {
-            Long contactId = contactService.createContact("Bob", "Marley", "bob.marley@home.com");
-            assertThat(contactId).isNotNull();
-        } catch(SQLException sqle) {
-            log.error("Error creating contact in test", sqle);
-        }
+        Long contactId = contactService.createContact("Bob", "Marley", "bob.marley@home.com");
+        assertThat(contactId).isNotNull();
     }
 
     @Test
     public void testGetContactAddressById() throws Exception {
         log.debug("Testing get contact address by id");
-        AddressDTO address = this.contactService.getContactAddressById(14L);
+        ContactDTO contact = this.contactService.getContactById(1L);
+        AddressDTO address = this.contactService.getContactAddressById(contact.getAddress().getAddressId());
         assertThat(address).isNotNull();
     }
 
     @Test
-    public void testGetContactCount() throws Exception {
+    public void testGetContactCount() {
         log.debug("Test get contact count");
         Long contactCount = this.contactService.getContactCount();
         assertThat(contactCount).isNotNull().isGreaterThan(1);
@@ -87,15 +82,21 @@ public class ContactServiceTest {
 
         contactService.deleteContactById(contactId);
 
-        ContactDTO contact = contactService.getContactById(contactId);
-        assertThat(contact).isNull();
+        try {
+            ContactDTO contact = contactService.getContactById(contactId);
+        } catch(ContactNotFoundException npe) {
+            assertThat(npe).isNotNull();
+        }
 
-        AddressDTO failedAddress = contactService.getContactAddressById(addressId);
-        assertThat(failedAddress).isNull();
+        try {
+            AddressDTO failedAddress = contactService.getContactAddressById(addressId);
+        } catch(NullPointerException npe) {
+            assertThat(npe).isNotNull();
+        }
     }
 
     @Test
-    public void testGetContactAddresses() throws Exception {
+    public void testGetContactAddresses() {
         log.debug("Test get contact addresses");
         List<AddressDTO> results = contactService.getContactAddresses(1L);
 
@@ -103,27 +104,21 @@ public class ContactServiceTest {
     }
 
     @Test
-    public void testCreateContactAddress() {
+    public void testCreateContactAddress() throws Exception {
         log.debug("Test create contact address");
-        try  {
-            Long contactId = contactService.createContact("Bob", "Marley", "bob.marley@home.com");
-            assertThat(contactId).isNotNull();
-            AddressDTO address = new AddressDTO();
-            address.setContactId(contactId);
-            address.setStreet1("123 Sesame St");
-            address.setStreet2("Apt 23");
-            address.setCity("New York");
-            address.setState("New York");
-            address.setCountry("USA");
-            address.setPostalCode("123456");
+        Long contactId = contactService.createContact("Bob", "Marley", "bob.marley@home.com");
+        assertThat(contactId).isNotNull();
+        AddressDTO address = new AddressDTO();
+        address.setContactId(contactId);
+        address.setStreet1("123 Sesame St");
+        address.setStreet2("Apt 23");
+        address.setCity("New York");
+        address.setState("New York");
+        address.setCountry("USA");
+        address.setPostalCode("123456");
 
-            Long addressId = contactService.createContactAddress(contactId, address);
-            assertThat(addressId).isNotNull().isGreaterThan(1);
-        } catch(SQLException sqle) {
-            log.error("Error creating contact in test", sqle);
-        }
-
-
+        Long addressId = contactService.createContactAddress(contactId, address);
+        assertThat(addressId).isNotNull().isGreaterThan(1);
     }
 
     @Test

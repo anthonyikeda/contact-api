@@ -29,13 +29,8 @@ public class ContactResource {
     @HEAD
     @Produces(MediaType.APPLICATION_JSON)
     public Response getContactCount() {
-        try {
-            long total = this.contactService.getContactCount();
-            return Response.ok().header("X-Total-Contacts", total).build();
-        } catch(Exception e) {
-            log.error("Error getting contact count", e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
-        }
+        long total = this.contactService.getContactCount();
+        return Response.ok().header("X-Total-Contacts", total).build();
     }
 
     @Path("/{contactId}")
@@ -44,15 +39,11 @@ public class ContactResource {
     public Response getContactById(@PathParam("contactId") Long contactId) {
         try {
             ContactDTO contact = this.contactService.getContactById(contactId);
-            if(contact == null) {
-                return Response.status(Response.Status.NOT_FOUND).build();
-            }
             return Response.ok(contact).build();
-        } catch(Exception e) {
+        } catch(ContactNotFoundException e) {
             log.error("Error getting contact with id {}", contactId, e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+            return Response.status(Response.Status.NOT_FOUND).build();
         }
-
     }
 
     @GET
@@ -63,14 +54,9 @@ public class ContactResource {
         log.info("Auth header: {}", authHeader);
         Timer.Sample contactRequest = Timer.start();
         log.debug("Querying for all contacts with start {} and size {}", start, size);
-        try {
-            List<ContactDTO> results = this.contactService.getPaginatedContacts(start, size);
-            contactRequest.stop(registry.timer("contacts.rest.all.request"));
-            return Response.ok(results).build();
-        } catch(Exception e) {
-            log.error("Error getting the page of results", e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
-        }
+        List<ContactDTO> results = this.contactService.getPaginatedContacts(start, size);
+        contactRequest.stop(registry.timer("contacts.rest.all.request"));
+        return Response.ok(results).build();
     }
 
     @PUT
@@ -82,10 +68,6 @@ public class ContactResource {
                                   @QueryParam("email_address") String emailAddress) {
         try {
             ContactDTO contact = contactService.getContactById(contactId);
-
-            if (contact == null) {
-                return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Client").build();
-            }
 
             boolean updated = false;
 
@@ -114,8 +96,8 @@ public class ContactResource {
             } else {
                 return Response.status(Response.Status.NOT_MODIFIED).build();
             }
-        } catch(Exception e) {
-            return Response.status(Response.Status.BAD_REQUEST).build();
+        } catch(ContactNotFoundException e) {
+            return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Client").build();
         }
     }
 
@@ -126,14 +108,13 @@ public class ContactResource {
     @Produces(value = {"application/json"})
     public Response createContact(@QueryParam("first_name") String firstName, @QueryParam("last_name") String lastname,
                                   @QueryParam("email_address") String emailAddress) {
-        try {
-            Long contactId = contactService.createContact(firstName, lastname, emailAddress);
-            log.debug("Saved contact, new id is: {}", contactId);
-            return Response.created(URI.create(String.format("/api/contact/%d", contactId))).build();
-        } catch(Exception e) {
-            log.error("Error creating new contact", e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+        if(firstName == null || lastname == null || emailAddress == null) {
+            return Response.status(Response.Status.BAD_REQUEST).build();
         }
+
+        Long contactId = contactService.createContact(firstName, lastname, emailAddress);
+        log.debug("Saved contact, new id is: {}", contactId);
+        return Response.created(URI.create(String.format("/api/contact/%d", contactId))).build();
     }
 
     @POST
@@ -146,13 +127,8 @@ public class ContactResource {
         try {
             ContactDTO contact = contactService.getContactById(contactId);
 
-            if (contact == null) {
-                log.debug("Contact {} does not exist", contactId);
-                return Response.status(Response.Status.NOT_FOUND).build();
-            }
-
-            List<AddressDTO> addresses = contactService.getContactAddresses(contactId);
-            if(addresses.size() == 0) {
+            List<AddressDTO> addresses = contactService.getContactAddresses(contact.getContactId());
+            if (addresses.size() == 0) {
                 AddressDTO address = new AddressDTO();
                 address.setStreet1(addressDTO.getStreet1());
                 address.setStreet2(addressDTO.getStreet2());
@@ -161,18 +137,20 @@ public class ContactResource {
                 address.setCountry(addressDTO.getCountry());
                 address.setPostalCode(addressDTO.getPostalCode());
 
-                Long addressId = contactService.createContactAddress(contactId, address);
+                Long addressId = contactService.createContactAddress(contact.getContactId(), address);
                 address.setAddressId(addressId);
-                log.debug("Saved address {} for contact {}", address.getAddressId(), contactId);
-                return Response.created(URI.create(String.format("/api/contact/%d/address/%d", contactId, address.getAddressId()))).build();
+                log.debug("Saved address {} for contact {}", address.getAddressId(), contact.getContactId());
+                return Response.created(URI.create(String.format("/api/contact/%d/address/%d", contact.getContactId(), address.getAddressId()))).build();
             } else {
                 return Response.status(Response.Status.BAD_REQUEST)
                         .entity(String.format("Contact already has an address with id %d", addresses.get(0).getAddressId())).build();
             }
-
-        } catch(Exception e) {
-            log.error("Error finding contact with id {}", contactId, e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+        } catch(ContactNotFoundException cnfe) {
+            log.error("Unable to find contact {}", contactId, cnfe);
+            return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Client").build();
+        } catch(ContactAddressAlreadyExistsException caee) {
+            log.error("Contact already has an address", caee);
+            return Response.status(Response.Status.BAD_REQUEST).entity(caee.getMessage()).build();
         }
 
     }
@@ -231,8 +209,12 @@ public class ContactResource {
             }
 
             if (updated) {
-                contactService.updateAddress(address);
-                return Response.accepted().build();
+                try {
+                    contactService.updateAddress(address);
+                    return Response.accepted().build();
+                } catch(AddressNotFoundException anfe) {
+                    return Response.status(Response.Status.NOT_FOUND).build();
+                }
             }
         } catch(Exception e) {
             log.error("Error finding processing address with id {}", addressId, e);
@@ -249,16 +231,11 @@ public class ContactResource {
     public Response deleteContact(@PathParam("contact_id") Long contactId) {
         try {
             ContactDTO contact = contactService.getContactById(contactId);
-
-            if (contact == null) {
-                return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Contact").build();
-            }
-
             contactService.deleteContactById(contact.getContactId());
             return Response.accepted().build();
-        } catch(Exception e) {
+        } catch(ContactNotFoundException e) {
             log.error("Error deleting contact with id {}", contactId, e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+            return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Contact").build();
         }
     }
 
@@ -270,22 +247,18 @@ public class ContactResource {
         try {
             ContactDTO contact = contactService.getContactById(contactId);
 
-            if (contact == null) {
-                return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Client").build();
-            }
+            AddressDTO contactAddress = contact.getAddress();
 
-            AddressDTO contactAddress = contactService.getContactAddressById(addressId);
-
-            if (contactAddress != null) {
+            if (contactAddress != null && contactAddress.getAddressId().equals(addressId)) {
                 log.debug("Found address {} for contact {}", addressId, contactId);
                 contactService.deleteAddressById(contactAddress.getAddressId());
                 return Response.accepted().build();
             } else {
                 return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Address").build();
             }
-        } catch(Exception e) {
-            log.error("Error deleting address with id {}", addressId, e);
-            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(e.getMessage()).build();
+        } catch(ContactNotFoundException e) {
+            log.error("Error deleting address with id {} for contact {}", addressId, contactId, e);
+            return Response.status(Response.Status.NOT_FOUND).header("X-Not-Found", "Client").build();
         }
     }
 }

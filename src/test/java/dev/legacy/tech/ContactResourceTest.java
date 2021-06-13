@@ -62,9 +62,8 @@ public class ContactResourceTest {
                 .get("/api/contact")
                 .then().log().all()
                 .statusCode(200)
-                .body("$.size()", is(4),
-                        "[0].contact_id", is(2),
-                        "[1].first_name", is("Sarah"));
+                .body("[0].contact_id", is(1),
+                        "[1].first_name", is("Andrea"));
     }
 
     @Test
@@ -86,7 +85,7 @@ public class ContactResourceTest {
                 .when().log().all()
                 .post("/api/contact")
                 .then().log().all()
-                .statusCode(500);
+                .statusCode(400);
     }
 
     @Test
@@ -157,7 +156,7 @@ public class ContactResourceTest {
 
         Response response = given().queryParam("first_name", "Judy")
                 .queryParam("last_name", "Juice")
-                .queryParam("email_addr", "judy.juice@sauce.com")
+                .queryParam("email_address", "judy.juice@sauce.com")
                 .when()
                 .post("/api/contact");
         String location = response.getHeader("Location");
@@ -221,11 +220,43 @@ public class ContactResourceTest {
     }
 
     @Test
+    public void deleteNonExistentContact() {
+        given()
+                .contentType(ContentType.fromContentType("application/json"))
+                .when()
+                .delete("/api/contact/98765")
+                .then()
+                .statusCode(404);
+    }
+    @Test
+    public void testDeleteContact() {
+        Response response = given()
+                .contentType(ContentType.fromContentType("application/json"))
+                .queryParam("first_name", "Jonathan")
+                .queryParam("last_name", "Hanson")
+                .queryParam("email_address", "jhanson@voyager.com")
+                .when()
+                .post("/api/contact");
+
+        String location = response.header("Location");
+        assertThat(location).isNotNull();
+        assertThat(response.statusCode()).isEqualTo(201);
+
+        log.info(location);
+
+        given()
+                .contentType(ContentType.fromContentType("application/json"))
+                .when()
+                .delete(location)
+                .then()
+                .statusCode(202);
+    }
+    @Test
     public void testDeleteContactAddress() {
         given()
                 .contentType(ContentType.fromContentType("application/json"))
                 .when().log().all()
-                .delete("/api/contact/3/address/12")
+                .delete("/api/contact/3/address/3")
                 .then().log().all()
                 .statusCode(202);
 
